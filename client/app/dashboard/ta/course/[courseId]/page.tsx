@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { use } from "react";
+import BulkUploadDialog from "@/components/BulkUploadDialog";
 import {
   Table,
   TableHeader,
@@ -53,6 +54,8 @@ export default function TACourseDetailPage({
 }) {
   const resolvedParams = use(params);
   const courseId = resolvedParams.courseId;
+  // Add this state variable
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [course, setCourse] = useState<Course | null>(null);
   const [answerSheets, setAnswerSheets] = useState<AnswerSheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,36 +65,34 @@ export default function TACourseDetailPage({
   const [examType, setExamType] = useState("quiz");
   const [uploading, setUploading] = useState(false);
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
-
+  const fetchData = async () => {
+    try {
+      const [courseRes, sheetsRes] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/answersheets/course/${courseId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+  
+      if (!courseRes.ok) throw new Error("Failed to fetch course details");
+      if (!sheetsRes.ok) throw new Error("Failed to fetch answer sheets");
+  
+      const [courseData, sheetsData] = await Promise.all([
+        courseRes.json(),
+        sheetsRes.json(),
+      ]);
+  
+      setCourse(courseData);
+      setAnswerSheets(sheetsData);
+    } catch (err) {
+      toast.error("An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [courseRes, sheetsRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/answersheets/course/${courseId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        if (!courseRes.ok) throw new Error("Failed to fetch course details");
-        if (!sheetsRes.ok) throw new Error("Failed to fetch answer sheets");
-
-        const [courseData, sheetsData] = await Promise.all([
-          courseRes.json(),
-          sheetsRes.json(),
-        ]);
-
-        setCourse(courseData);
-        setAnswerSheets(sheetsData);
-      } catch (err) {
-        toast.error("An error occurred");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [courseId, token]);
 
@@ -206,9 +207,14 @@ export default function TACourseDetailPage({
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">{course.title}</h1>
-        <p className="text-muted-foreground">{course.code}</p>
+      <div className="flex justify-between items-center mb-4">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold">{course.title}</h1>
+          <p className="text-muted-foreground">{course.code}</p>
+        </div>
+        <Button onClick={() => setIsBulkUploadOpen(true)}>
+          Bulk Upload
+        </Button>
       </div>
 
       <div className="rounded-md border">
@@ -333,6 +339,15 @@ export default function TACourseDetailPage({
           </form>
         </DialogContent>
       </Dialog>
+      <BulkUploadDialog
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        courseId={courseId}
+        onSuccess={() => {
+          // Re-fetch data after successful bulk upload
+          fetchData();
+        }}
+      />
     </div>
   );
 }

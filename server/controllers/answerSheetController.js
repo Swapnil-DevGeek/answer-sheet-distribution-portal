@@ -2,6 +2,8 @@ const AnswerSheet = require('../models/AnswerSheet');
 const Course = require('../models/Course');
 const User = require('../models/User');
 
+const { extractStudentId, getEmailFromId } = require('../utils/studentMatcher');
+
 // POST /api/answersheets
 // Professor or TA uploads an answer sheet.
 const uploadAnswerSheet = async (req, res) => {
@@ -100,4 +102,62 @@ res.status(500).json({ message: 'Server error' });
 }
 };
 
-module.exports = { uploadAnswerSheet, getCourseAnswerSheets, getMyAnswerSheets };
+const bulkUploadAnswerSheets = async (req, res) => {
+  try {
+    const { courseId, fileUrls, examType } = req.body;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found.' });
+    }
+
+    const results = {
+      successful: [],
+      failed: []
+    };
+
+    for (const fileInfo of fileUrls) {
+      try {
+        const studentId = extractStudentId(fileInfo.name);
+        if (!studentId) {
+          results.failed.push({ file: fileInfo.name, reason: 'Invalid filename format' });
+          continue;
+        }
+
+        const studentEmail = getEmailFromId(studentId);
+        const student = await User.findOne({ email: studentEmail });
+
+        if (!student) {
+          results.failed.push({ file: fileInfo.name, reason: 'Student not found' });
+          continue;
+        }
+
+        const answerSheet = new AnswerSheet({
+          course: courseId,
+          student: student._id,
+          examType,
+          fileUrl: fileInfo.url,
+          uploadedBy: req.user.id
+        });
+
+        await answerSheet.save();
+        results.successful.push({ file: fileInfo.name, student: student.email });
+      } catch (error) {
+        results.failed.push({ file: fileInfo.name, reason: error.message });
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Add to module.exports
+module.exports = { 
+  uploadAnswerSheet, 
+  getCourseAnswerSheets, 
+  getMyAnswerSheets,
+  bulkUploadAnswerSheets 
+};
