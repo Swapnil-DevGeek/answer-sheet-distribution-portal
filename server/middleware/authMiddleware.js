@@ -12,8 +12,8 @@ const authMiddleware = (req, res, next) => {
             roles: decoded.roles, // Ensure roles are included
             activeRole: decoded.activeRole
         };
-        console.log(req.user);
-        console.log('req.user');
+        // console.log(req.user);
+        // console.log('req.user');
         next();
     } catch (err) {
         res.status(401).json({ message: 'Token is not valid' });

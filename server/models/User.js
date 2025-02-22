@@ -15,25 +15,39 @@ const UserSchema = new Schema({
     type: String,
     required: true
   },
-  roles: [{
-    type: String,
-    enum: ['super_admin', 'professor', 'ta', 'student'],
+  roles: {
+    type: [{
+      type: String,
+      enum: ['super_admin', 'professor', 'ta', 'student']
+    }],
     required: true,
     validate: {
       validator: function(roles) {
-        // Ensure admin and professor can only have one role
+        // Check if roles is an array
+        if (!Array.isArray(roles)) return false;
+        
+        // Ensure there's at least one role
+        if (roles.length === 0) return false;
+        
+        // Super admin and professor can only have one role
         if (roles.includes('super_admin') || roles.includes('professor')) {
           return roles.length === 1;
         }
-        // Allow student to also be a TA
+        
+        // Student can be a TA, but no other combinations
         if (roles.includes('student')) {
           return roles.every(role => ['student', 'ta'].includes(role));
         }
-        return true;
+        
+        // TA can exist alone or with student
+        if (roles.includes('ta')) {
+          return roles.every(role => ['student', 'ta'].includes(role));
+        }
+        return false;
       },
       message: 'Invalid role combination'
     }
-  }],
+  },
   createdAt: {
     type: Date,
     default: Date.now

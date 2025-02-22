@@ -29,16 +29,24 @@ passport.use(
         let user = await User.findOne({ email: profile.emails[0].value });
         
         if (!user) {
+          // Ensure roles is an array of strings for validation
+          const roles = ['student'];
           user = await User.create({
             name: profile.displayName,
             email: profile.emails[0].value,
-            password: 'google-auth',
-            role: 'student'
+            googleId: profile.id,
+            password: Math.random().toString(36).slice(-8),
+            roles: roles
           });
+        } else if (!Array.isArray(user.roles) || user.roles.length === 0) {
+          // Ensure roles is properly set as an array
+          user.roles = ['student'];
+          await user.save();
         }
         
         return done(null, user);
       } catch (error) {
+        console.error('Google auth error:', error);
         return done(error, null);
       }
     }

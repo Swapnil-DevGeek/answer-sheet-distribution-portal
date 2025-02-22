@@ -1,7 +1,7 @@
 const authorizeRoles = (...allowedRoles) => {
     return (req, res, next) => {
         // console.log(req.user)
-        console.log(req.user);
+        // console.log(req.user);
         if (!req.user || !req.user.roles) {
             return res.status(403).json({
                 message: 'Not authorized to access this resource'
