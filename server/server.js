@@ -22,13 +22,14 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // CORS configuration
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['Authorization', 'Content-Length']
-}));
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Active-Role']
+};
+
+app.use(cors(corsOptions));
 
 mongoose.connect(MONGO_URI)
 .then(() => console.log('Connected to MongoDB'))
@@ -39,8 +40,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/auth', require("./routes/authRoutes"));
 app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/courses', require('./routes/courseRoutes'));
-app.use('/api/courses', require('./routes/courseMemberRoutes'));
+app.use('/api/courses', require('./routes/courseRoutes')); 
 app.use('/api/answersheets', require('./routes/answerSheetRoutes'));
 app.use('/api/rechecks', require('./routes/recheckRoutes'));
 

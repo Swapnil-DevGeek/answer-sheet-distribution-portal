@@ -36,7 +36,7 @@ type Course = {
   professor: Professor | null;
 };
 
-const SuperAdminDashboard= ()=> {
+export default function SuperAdminDashboard({user}:any) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +50,15 @@ const SuperAdminDashboard= ()=> {
     description: "",
     professor: "",
   });
-
   const token = localStorage.getItem("token");
-
   useEffect(() => {
-    fetchCourses();
-    fetchProfessors();
-  }, []);
-
+    if (user && user.activeRole === "super_admin") {
+      fetchCourses();
+      fetchProfessors();
+    } else {
+      router.push("/");
+    }
+  }, [user]);
   const fetchCourses = async () => {
     try {
       setLoading(true);
@@ -88,7 +89,6 @@ const SuperAdminDashboard= ()=> {
       setError("Error loading professors.");
     }
   };
-
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -259,5 +259,3 @@ const SuperAdminDashboard= ()=> {
     </div>
   );
 };
-
-export default SuperAdminDashboard;

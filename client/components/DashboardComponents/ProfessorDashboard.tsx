@@ -25,7 +25,10 @@ export default function ProfessorDashboard({user}:any) {
       try {
         setLoading(true);
         const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'X-Active-Role': user.activeRole // Add active role to headers
+          },
         });
         if (!res.ok) throw new Error("Failed to fetch courses");
         const data: Course[] = await res.json();
@@ -40,7 +43,7 @@ export default function ProfessorDashboard({user}:any) {
         setLoading(false);
       }
     };
-    if (currentUser && currentUser.role === "professor") {
+    if (currentUser && currentUser.roles.includes("professor")) {
       fetchCourses();
     } else {
       router.push("/");

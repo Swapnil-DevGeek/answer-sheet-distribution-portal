@@ -9,6 +9,8 @@ const { extractStudentId, getEmailFromId } = require('../utils/studentMatcher');
 const uploadAnswerSheet = async (req, res) => {
 try {
 const { course, student, examType, fileUrl } = req.body;
+// 67b9a037b32d27d4e9545866
+// 67b9a037b32d27d4e9545866
 
 if (!course || !student || !examType || !fileUrl) {
   return res.status(400).json({ message: 'Missing required fields.' });
@@ -21,20 +23,20 @@ if (!courseData) {
 
 const userId = req.user.id;
 if (
-  req.user.role === 'professor' &&
+  req.user.activeRole === 'professor' &&
   courseData.professor.toString() !== userId
 ) {
   return res.status(403).json({ message: 'Not authorized: You are not assigned as professor for this course.' });
 }
 if (
-  req.user.role === 'ta' &&
+  req.user.activeRole === 'ta' &&
   !courseData.TAs.map(taId => taId.toString()).includes(userId)
 ) {
   return res.status(403).json({ message: 'Not authorized: You are not added as a TA for this course.' });
 }
 
 const studentData = await User.findById(student);
-if (!studentData || studentData.role !== 'student') {
+if (!studentData || !studentData.roles.includes('student')) {
   return res.status(400).json({ message: 'Invalid student id.' });
 }
 
@@ -65,10 +67,10 @@ return res.status(404).json({ message: 'Course not found.' });
 }
 
 const userId = req.user.id;
-if (req.user.role === 'professor' && courseData.professor.toString() !== userId) {
+if (req.user.activeRole === 'professor' && courseData.professor.toString() !== userId) {
   return res.status(403).json({ message: 'Not authorized to access answer sheets for this course.' });
 }
-if (req.user.role === 'ta' && !courseData.TAs.map(taId => taId.toString()).includes(userId)) {
+if (req.user.activeRole === 'ta' && !courseData.TAs.map(taId => taId.toString()).includes(userId)) {
   return res.status(403).json({ message: 'Not authorized to access answer sheets for this course.' });
 }
 
@@ -88,7 +90,7 @@ res.status(500).json({ message: 'Server error' });
 const getMyAnswerSheets = async (req, res) => {
 try {
 
-if (req.user.role !== 'student') {
+if (req.user.activeRole !== 'student') {
     return res.status(403).json({ message: 'Not authorized.' });
 }
 const answerSheets = await AnswerSheet.find({ student: req.user.id })
