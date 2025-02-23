@@ -9,10 +9,10 @@ type AnswerSheet = {
   fileUrl: string;
 };
 
-export default function StudentCourseDetailPage({ params }: { params: Promise<{ courseId: string }> }) {
+export default function StudentCourseDetailPage({ params }: { params: Promise<{ course_id: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
-  const courseId = resolvedParams.courseId;
+  const courseId = resolvedParams.course_id;
   
   useEffect(() => {
     if (!courseId) {
