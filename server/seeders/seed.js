@@ -7,69 +7,62 @@ require('dotenv').config();
 const seedDatabase = async () => {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/answer-sheet-portal");
     console.log('Connected to MongoDB');
 
     // Clear existing data
     await User.deleteMany({});
     await Course.deleteMany({});
 
-    // Create users
     const hashedPassword = await bcrypt.hash('password123', 10);
-
+    // Create users with various roles
     const superAdmin = await User.create({
       name: 'Super Admin',
       email: 'admin@example.com',
       password: hashedPassword,
-      role: 'super_admin'
+      roles: ['super_admin']
     });
-
     const professor = await User.create({
       name: 'Professor Smith',
       email: 'professor@example.com',
       password: hashedPassword,
-      role: 'professor'
+      roles: ['professor']
     });
-
-    const ta = await User.create({
-      name: 'TA Johnson',
-      email: 'ta@example.com',
+    const taStudent = await User.create({
+      name: 'John Doe',
+      email: 'johnta@example.com',
       password: hashedPassword,
-      role: 'ta'
+      roles: ['ta', 'student']  // User with multiple roles
     });
-
-    const student = await User.create({
-      name: 'Student Doe',
-      email: 'student@example.com',
+    const regularStudent = await User.create({
+      name: 'Jane Smith',
+      email: 'jane@example.com',
       password: hashedPassword,
-      role: 'student'
+      roles: ['student']
     });
-
-    // Create courses
+    // Create courses demonstrating role separation
     const course1 = await Course.create({
       title: 'Introduction to Computer Science',
       code: 'CS101',
       description: 'Basic concepts of computer science',
       professor: professor._id,
-      TAs: [ta._id],
-      students: [student._id]
+      TAs: [taStudent._id],  // taStudent is a TA in this course
+      students: [regularStudent._id]
     });
-
     const course2 = await Course.create({
       title: 'Data Structures',
       code: 'CS201',
       description: 'Advanced data structures and algorithms',
       professor: professor._id,
-      TAs: [ta._id],
-      students: [student._id]
+      TAs: [regularStudent._id],
+      students: [taStudent._id]  // taStudent is a student in this course
     });
-
     console.log('Database seeded successfully');
     console.log('\nTest Account Credentials:');
     console.log('Super Admin - Email: admin@example.com, Password: password123');
     console.log('Professor - Email: professor@example.com, Password: password123');
-    console.log('TA - Email: ta@example.com, Password: password123');
-    console.log('Student - Email: student@example.com, Password: password123');
+    console.log('TA/Student - Email: johnta@example.com, Password: password123');
+    console.log('Student - Email: jane@example.com, Password: password123');
 
   } catch (error) {
     console.error('Error seeding database:', error);

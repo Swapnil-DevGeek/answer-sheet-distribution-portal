@@ -3,24 +3,34 @@ const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const authorizeRoles = require('../middleware/roleMiddleware');
 
-const { createCourse,getCourseById,getCourses,deleteCourse,updateCourse } = require('../controllers/courseController');
+const { 
+    createCourse, 
+    getCourseById, 
+    getCourses, 
+    deleteCourse, 
+    updateCourse 
+} = require('../controllers/courseController');
+
+const { 
+    addTAs, 
+    addStudents, 
+    getMembers, 
+    bulkAddMembersFromExcel 
+} = require('../controllers/courseMemberController');
 
 router.use(authMiddleware);
-router.use(authorizeRoles('super_admin','professor','ta','student'));
 
-// POST /api/courses – Create a new course
-router.post('/', createCourse);
+// Course CRUD routes
+router.post('/', authorizeRoles('super_admin'), createCourse);
+router.get('/', authorizeRoles('super_admin', 'professor', 'ta', 'student'), getCourses);
+router.get('/:id', authorizeRoles('super_admin', 'professor', 'ta', 'student'), getCourseById);
+router.put('/:id', authorizeRoles('super_admin'), updateCourse);
+router.delete('/:id', authorizeRoles('super_admin'), deleteCourse);
 
-// GET /api/courses – Get all courses
-router.get('/', getCourses);
-
-// GET /api/courses/:id – Get a single course by ID
-router.get('/:id', getCourseById);
-
-// PUT /api/courses/:id – Update a course by ID
-router.put('/:id', updateCourse);
-
-// DELETE /api/courses/:id – Delete a course by ID
-router.delete('/:id', deleteCourse);
+// Course member management routes
+router.post('/:courseId/tas', authorizeRoles('super_admin', 'professor'), addTAs);
+router.post('/:courseId/students', authorizeRoles('super_admin', 'professor'), addStudents);
+router.get('/:courseId/members', authorizeRoles('super_admin', 'professor', 'ta'), getMembers);
+router.post('/:courseId/members/bulk-excel', authorizeRoles('super_admin', 'professor'), bulkAddMembersFromExcel);
 
 module.exports = router;

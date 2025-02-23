@@ -36,7 +36,7 @@ const updateProfile = async (req, res) => {
 // GET /api/users/professors
 const getProfessors = async (req, res) => {
     try{
-        const professors = await User.find({ role: 'professor' }).select('-password');
+        const professors = await User.find({ roles: 'professor' }).select('-password');
         res.json(professors);
     }catch(error) {
         console.error(error);
@@ -44,10 +44,9 @@ const getProfessors = async (req, res) => {
     }
 }
 
-// GET /api/users/students
 const getStudents = async (req,res)=> {
     try{
-        const students = await User.find({ role:'student' }).select('-password');
+        const students = await User.find({ roles: 'student' }).select('-password');
         res.json(students);
     }catch(error) {
         console.error(error);
@@ -55,16 +54,15 @@ const getStudents = async (req,res)=> {
     }
 }
 
-// GET /api/users/tas
-    const getTAs = async (req,res)=> {
-        try{
-            const TAs = await User.find({ role:'ta' }).select('-password');
-            res.json(TAs);
-        }catch(error) {
-            console.error(error);
-            res.status(500).json({ message: 'Server error' });
-        }
+const getTAs = async (req,res)=> {
+    try{
+        const TAs = await User.find({ roles: 'ta' }).select('-password');
+        res.json(TAs);
+    }catch(error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
     }
+}
 
 module.exports = {
     getProfile,
