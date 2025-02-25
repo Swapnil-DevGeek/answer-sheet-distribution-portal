@@ -87,14 +87,14 @@ export default function CourseDetailPage({
   const fetchTAs = async () => {
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/tas`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/students`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
       if (res.ok) {
         const data = await res.json();
-        setAllTAs(data);
+        setAllTAs(data); // This will now contain all students
       }
     } catch (err) {
       console.error(err);
@@ -124,45 +124,44 @@ export default function CourseDetailPage({
       fetchStudents();
     }
   }, [activeTab, token]);
-  const handleAddTA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}/tas`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ tas: selectedTA }),
-        }
-      );
-      
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.message.includes("already a student")) {
-          toast.error("Cannot add as TA: User is already a student in this course");
-          setError("Cannot add as TA: User is already a student in this course");
-          return;
-        }
-        throw new Error(data.message || "Failed to add TA");
+const handleAddTA = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}/tas`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tas: selectedTA }),
       }
-      const addedTA = allTAs.find(ta => ta._id === selectedTA);
-      setCourse(prevCourse => {
-        if (!prevCourse) return null;
-        return {
-          ...prevCourse,
-          TAs: [...prevCourse.TAs, addedTA!]
-        };
-      });
-      setSelectedTA("");
-      toast.success("TA added successfully!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to add TA");
-      setError(err.message || "Failed to add TA");
+    );
+    
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.message || "Failed to add TA");
+      setError(data.message || "Failed to add TA");
+      return;
     }
-  };
+
+    const addedTA = allTAs.find(ta => ta._id === selectedTA);
+    setCourse(prevCourse => {
+      if (!prevCourse) return null;
+      return {
+        ...prevCourse,
+        TAs: [...prevCourse.TAs, addedTA!]
+      };
+    });
+    setSelectedTA("");
+    toast.success("TA added successfully!");
+  } catch (err: any) {
+    toast.error(err.message || "Failed to add TA");
+    setError(err.message || "Failed to add TA");
+  }
+};
+  
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {

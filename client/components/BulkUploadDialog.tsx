@@ -91,13 +91,23 @@ export default function BulkUploadDialog({
 
       const result = await res.json();
       
-      if (result.successful.length > 0) {
-        toast.success(`Successfully uploaded ${result.successful.length} answer sheets`);
+      if (result.successful?.length > 0) {
+        const updatedCount = result.successful.filter(s => s.status === 'updated').length;
+        const createdCount = result.successful.filter(s => s.status === 'created').length;
+        
+        if (updatedCount > 0) {
+          toast.success(`Updated ${updatedCount} existing answer sheets`);
+        }
+        if (createdCount > 0) {
+          toast.success(`Added ${createdCount} new answer sheets`);
+        }
       }
       
-      if (result.failed.length > 0) {
+      if (result.failed?.length > 0) {
         toast.error(`Failed to upload ${result.failed.length} files`);
-        console.error('Failed uploads:', result.failed);
+        result.failed.forEach(failure => {
+          toast.error(`${failure.name}: ${failure.reason}`);
+        });
       }
 
       onSuccess();
@@ -136,7 +146,7 @@ export default function BulkUploadDialog({
             <SelectContent>
               <SelectItem value="quiz">Quiz</SelectItem>
               <SelectItem value="midsem">Midsem</SelectItem>
-              <SelectItem value="endsem">Endsem</SelectItem>
+              <SelectItem value="compre">Compre</SelectItem>
             </SelectContent>
           </Select>
           <Button type="submit" disabled={uploading || !files}>

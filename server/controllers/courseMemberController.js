@@ -2,52 +2,60 @@ const Course = require("../models/Course");
 const User = require("../models/User");
 
 const addTAs = async (req, res) => {
-    try {
-        const {courseId} = req.params;
-        const {tas} = req.body;
-        if(!tas || tas.length === 0) return res.status(400).json({message: "No TAs provided"});
-        const course = await Course.findById(courseId);
-        if(!course) return res.status(404).json({message: "Course not found"});
-        if (course.professor.toString() !== req.user.id) {
-            return res.status(403).json({ message: 'Not authorized to add TAs to this course.' });
-        }
-        const taIds = Array.isArray(tas) ? tas : [tas];
-        
-        // Check if any of the TAs are already students in this course
-        for (const taId of taIds) {
-            if (course.students.includes(taId)) {
-                return res.status(400).json({ 
-                    message: `User is already a student in this course and cannot be added as a TA.`
-                });
-            }
-            if (course.TAs.includes(taId)) {
-                return res.status(400).json({ 
-                    message: `User is already a TA in this course.`
-                });
-            }
-        }
+  try {
+    const courseId = req.params.courseId;
+    const { tas } = req.body;
 
-        for (const taId of taIds) {
-            const user = await User.findById(taId);
-            if (!user || !user.roles.includes('ta')) {
-              return res.status(400).json({ message: `User with id ${taId} is not a valid TA.` });
-            }
-        }
-
-        const newTAs = taIds.filter(taId => !course.TAs.includes(taId));
-        course.TAs.push(...newTAs);
-        await course.save();
-
-        const updatedCourse = await Course.findById(courseId)
-            .populate('TAs', 'name email')
-            .populate('students', 'name email');
-
-        res.status(200).json({ message: "TAs added successfully", course: updatedCourse });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Server Error" });
+    // Find the course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
     }
+
+    // Convert single TA to array if necessary
+    const taArray = Array.isArray(tas) ? tas : [tas];
+
+    // Check if any of the TAs are already students in this course
+    for (const taId of taArray) {
+      if (course.students.includes(taId)) {
+        return res.status(400).json({ 
+          message: "Cannot add as TA: User is already a student in this course"
+        });
+      }
+    }
+
+    // Update each user's roles and add them to the course
+    for (const taId of taArray) {
+      const user = await User.findById(taId);
+      if (!user) continue;
+
+      // Add TA role if user doesn't have it
+      if (!user.roles.includes('ta')) {
+        user.roles.push('ta');
+        await user.save();
+      }
+
+      // Add TA to course if not already added
+      if (!course.TAs.includes(taId)) {
+        course.TAs.push(taId);
+      }
+    }
+
+    await course.save();
+    
+    // Fetch updated course with populated data
+    const updatedCourse = await Course.findById(courseId)
+      .populate('TAs', 'name email')
+      .populate('students', 'name email')
+      .populate('professor', 'name email');
+
+    res.json(updatedCourse);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error adding TAs to course" });
+  }
 };
+
 
 const addStudents = async (req, res) => {
     try {
@@ -173,13 +181,13 @@ const bulkAddMembersFromExcel = async (req, res) => {
             name,
             email,
             password,
-            role: memberType === 'tas' ? 'ta' : 'student'
+            roles: memberType === 'tas' ? ['ta'] : ['student']
           });
           await user.save();
         }
 
         if (memberType === 'tas') {
-          if (user.role !== 'ta') {
+          if (!user.roles.includes('ta')) {
             results.failed.push({ email, reason: 'User is not a TA' });
             continue;
           }
@@ -190,7 +198,7 @@ const bulkAddMembersFromExcel = async (req, res) => {
             results.failed.push({ email, reason: 'Already added to course' });
           }
         } else {
-          if (user.role !== 'student') {
+          if (!user.roles.includes('student')) {
             results.failed.push({ email, reason: 'User is not a student' });
             continue;
           }
