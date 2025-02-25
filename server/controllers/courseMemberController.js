@@ -173,13 +173,13 @@ const bulkAddMembersFromExcel = async (req, res) => {
             name,
             email,
             password,
-            role: memberType === 'tas' ? 'ta' : 'student'
+            roles: memberType === 'tas' ? ['ta'] : ['student']
           });
           await user.save();
         }
 
         if (memberType === 'tas') {
-          if (user.role !== 'ta') {
+          if (!user.roles.includes('ta')) {
             results.failed.push({ email, reason: 'User is not a TA' });
             continue;
           }
@@ -190,7 +190,7 @@ const bulkAddMembersFromExcel = async (req, res) => {
             results.failed.push({ email, reason: 'Already added to course' });
           }
         } else {
-          if (user.role !== 'student') {
+          if (!user.roles.includes('student')) {
             results.failed.push({ email, reason: 'User is not a student' });
             continue;
           }
