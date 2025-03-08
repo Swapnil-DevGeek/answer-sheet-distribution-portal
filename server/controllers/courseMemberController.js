@@ -14,8 +14,8 @@ const addTAs = async (req, res) => {
         const taIds = Array.isArray(tas) ? tas : [tas];
         for (const taId of taIds) {
             const user = await User.findById(taId);
-            if (!user || user.role !== 'ta') {
-              return res.status(400).json({ message: `User with id ${taId} is not a valid TA.` });
+            if (!user || user.role !== 'student') {
+                return res.status(400).json({ message: `User with id ${taId} is not a valid student.` });
             }
         }
 
@@ -24,7 +24,14 @@ const addTAs = async (req, res) => {
         course.TAs.push(...newTAs);
         await course.save();
 
-        res.status(200).json({ message : "TAs added successfulyy",course});
+        for (const taId of newTAs) {
+            await User.findByIdAndUpdate(taId, {
+                isTa: true,
+                $addToSet: { taCourses: courseId }
+            });
+        }
+
+        res.status(200).json({ message: "TAs added successfully", course});
 
     } catch (error) {
         console.error(error);

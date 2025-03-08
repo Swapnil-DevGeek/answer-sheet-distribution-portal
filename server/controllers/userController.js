@@ -58,7 +58,7 @@ const getStudents = async (req,res)=> {
 // GET /api/users/tas
     const getTAs = async (req,res)=> {
         try{
-            const TAs = await User.find({ role:'ta' }).select('-password');
+            const TAs = await User.find({ isTa : true }).select('-password');
             res.json(TAs);
         }catch(error) {
             console.error(error);

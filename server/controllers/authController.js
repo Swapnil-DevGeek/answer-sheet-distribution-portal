@@ -43,7 +43,7 @@ const register = async (req, res) => {
   
   await user.save();
   
-  const payload = { id: user._id, role: user.role };
+  const payload = { id: user._id, role: user.role, isTa : user.isTa };
   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
   res.status(201).json({ token });
 } catch (error) {

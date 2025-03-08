@@ -82,8 +82,28 @@ export default function TACourseDetailPage({
           courseRes.json(),
           sheetsRes.json(),
         ]);
-
-        setCourse(courseData);
+        
+        // Fetch all students
+        const studentsRes = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/students`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (!studentsRes.ok) throw new Error("Failed to fetch students");
+        const allStudents = await studentsRes.json();
+        
+        // Filter students that are in the course
+        const courseStudents = allStudents.filter(student => 
+          courseData.students.includes(student._id)
+        );
+        
+        // Update course with full student objects
+        const courseWithStudents = {
+          ...courseData,
+          students: courseStudents
+        };
+        
+        setCourse(courseWithStudents);
         setAnswerSheets(sheetsData);
       } catch (err) {
         toast.error("An error occurred");
@@ -103,7 +123,6 @@ export default function TACourseDetailPage({
       process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
     );
     
-    // Add these parameters for better PDF handling
     formData.append("resource_type", "raw");
     formData.append("flags", "attachment");
 

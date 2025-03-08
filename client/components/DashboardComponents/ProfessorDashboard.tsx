@@ -30,7 +30,7 @@ export default function ProfessorDashboard({user}:any) {
         if (!res.ok) throw new Error("Failed to fetch courses");
         const data: Course[] = await res.json();
         const professorCourses = data.filter((course) => {
-          return course.professor._id === currentUser?._id;
+          return course.professor === currentUser?._id;
         });
         setCourses(professorCourses);
         setLoading(false);
@@ -66,12 +66,7 @@ export default function ProfessorDashboard({user}:any) {
               <p className="text-gray-600 mb-2">
                 <span className="font-semibold">Code:</span> {course.code}
               </p>
-              <p className="text-gray-600">
-                <span className="font-semibold">Professor:</span>{" "}
-                {typeof course.professor === "object"
-                  ? course.professor.name
-                  : "N/A"}
-              </p>
+              
             </div>
           ))}
         </div>

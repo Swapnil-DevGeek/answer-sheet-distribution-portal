@@ -19,7 +19,7 @@ type User = {
   id: string;
   name: string;
   email: string;
-  role: "super_admin" | "professor" | "ta" | "student";
+  role: "super_admin" | "professor" | "student";
 };
 
 export default function DashboardPage() {
@@ -105,7 +105,6 @@ export default function DashboardPage() {
 
       {user.role === "super_admin" && <SuperAdminDashboard />}
       {user.role === "professor" && <ProfessorDashboard user={user} />}
-      {user.role === "ta" && <TADashboard user={user} />}
       {user.role === "student" && <StudentDashboard user={user} />}
 
     </div>

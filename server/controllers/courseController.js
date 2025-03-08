@@ -36,8 +36,6 @@ const createCourse = async (req, res) => {
 const getCourses = async (req, res) => {
   try {
     const courses = await Course.find()
-      .populate("professor", "name email")
-      .select("-__v");
     res.json(courses);
   } catch (error) {
     console.error(error);
@@ -49,10 +47,6 @@ const getCourses = async (req, res) => {
 const getCourseById = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id)
-      .populate("professor", "name email")
-      .populate("TAs", "name email")
-      .populate("students", "name email")
-      .select("-__v");
     if (!course) return res.status(404).json({ message: "Course not found" });
     res.json(course);
   } catch (error) {

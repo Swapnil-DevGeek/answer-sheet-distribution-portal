@@ -7,7 +7,7 @@ const { uploadAnswerSheet, getCourseAnswerSheets, getMyAnswerSheets } = require(
 router.use(authMiddleware);
 
 router.post('/', authorizeRoles('professor', 'ta'), uploadAnswerSheet);
-router.get('/course/:courseId', authorizeRoles('professor', 'ta'), getCourseAnswerSheets);
+router.get('/course/:courseId', authorizeRoles('professor'), getCourseAnswerSheets);
 router.get('/mine', authorizeRoles('student'), getMyAnswerSheets);
 
 module.exports = router;

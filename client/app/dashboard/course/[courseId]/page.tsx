@@ -28,7 +28,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
-
 type Professor = { _id: string; name: string; email: string };
 type Student = { _id: string; name: string; email: string };
 type Course = {
@@ -51,30 +50,71 @@ export default function CourseDetailPage({
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("TAs");
   const [error, setError] = useState<string | null>(null);
-  const [allTAs, setAllTAs] = useState<Professor[]>([]);
   const [selectedTA, setSelectedTA] = useState("");
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState("");
   const [examType, setExamType] = useState("quiz");
   const [fileUrl, setFileUrl] = useState("");
-
-  const token = localStorage.getItem("token") ;
+  const [courseStudents, setCourseStudents] = useState<Student[]>([]);
+  const [courseTAs, setCourseTAs] = useState<Student[]>([]);
+  const [answerSheets, setAnswerSheets] = useState<any[]>([]);
+  const [nameFilter, setNameFilter] = useState("");
+  const [emailFilter, setEmailFilter] = useState("");
+  const [examTypeFilter, setExamTypeFilter] = useState("all");
+  const [uploadedFilter, setUploadedFilter] = useState("all");
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [selectedStudentForUpload, setSelectedStudentForUpload] = useState<Student | null>(null);
+  const token = localStorage.getItem("token");
 
   const fetchCourse = async () => {
     try {
+      setLoading(true);
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      if (!res.ok) throw new Error("Failed to fetch course details.");
-      const data = await res.json();
-      setCourse(data);
+      if (!res.ok) throw new Error("Failed to fetch course");
+      const courseData = await res.json();
+      setCourse(courseData);
+      
+      // Fetch all students
+      const studentsRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/students`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (!studentsRes.ok) throw new Error("Failed to fetch students");
+      const allStudentsData = await studentsRes.json();
+      setAllStudents(allStudentsData);
+      
+      // Filter to get course students and TAs with full details
+      const courseStudentsData = allStudentsData.filter(student => 
+        courseData.students.includes(student._id)
+      );
+      setCourseStudents(courseStudentsData);
+      
+      const courseTAsData = allStudentsData.filter(student => 
+        courseData.TAs.includes(student._id)
+      );
+      setCourseTAs(courseTAsData);
+      
+      // Fetch answer sheets for the course
+      const sheetsRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/answersheets/course/${courseId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (sheetsRes.ok) {
+        const sheetsData = await sheetsRes.json();
+        setAnswerSheets(sheetsData);
+      }
+      
+      setLoading(false);
     } catch (err) {
       console.error(err);
-      setError("Error loading course details.");
-    } finally {
+      setError("Error loading course.");
       setLoading(false);
     }
   };
@@ -82,83 +122,6 @@ export default function CourseDetailPage({
   useEffect(() => {
     fetchCourse();
   }, [courseId, token]);
-
-  const fetchTAs = async () => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/tas`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAllTAs(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchStudents = async () => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/students`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAllStudents(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === "TAs") {
-      fetchTAs();
-    }
-    if (activeTab === "Students" || activeTab === "AnswerSheets") {
-      fetchStudents();
-    }
-  }, [activeTab, token]);
-
-  const handleAddTA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}/tas`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ tas: selectedTA }),
-        }
-      );
-      if (res.ok) {
-        // Find the added TA from allTAs
-        const addedTA = allTAs.find(ta => ta._id === selectedTA);
-        // Update the course state locally
-        setCourse(prevCourse => {
-          if (!prevCourse) return null;
-          return {
-            ...prevCourse,
-            TAs: [...prevCourse.TAs, addedTA!]
-          };
-        });
-        setSelectedTA("");
-        setError("TA added successfully!");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Failed to add TA.");
-    }
-  };
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,14 +140,18 @@ export default function CourseDetailPage({
       if (res.ok) {
         // Find the added student from allStudents
         const addedStudent = allStudents.find(student => student._id === selectedStudent);
-        // Update the course state locally
-        setCourse(prevCourse => {
-          if (!prevCourse) return null;
-          return {
-            ...prevCourse,
-            students: [...prevCourse.students, addedStudent!]
-          };
-        });
+        if (addedStudent) {
+          // Update the courseStudents state locally
+          setCourseStudents(prev => [...prev, addedStudent]);
+          // Update the course state
+          setCourse(prevCourse => {
+            if (!prevCourse) return null;
+            return {
+              ...prevCourse,
+              students: [...prevCourse.students, selectedStudent]
+            };
+          });
+        }
         setSelectedStudent("");
         setError("Student added successfully!");
       }
@@ -194,6 +161,55 @@ export default function CourseDetailPage({
     }
   };
 
+  const handleAddTA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}/tas`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tas: selectedTA }),
+        }
+      );
+      if (res.ok) {
+        // Find the added TA from allStudents
+        const addedTA = allStudents.find(student => student._id === selectedTA);
+        if (addedTA) {
+          // Update the courseTAs state locally
+          setCourseTAs(prev => [...prev, addedTA]);
+          // Update the course state
+          setCourse(prevCourse => {
+            if (!prevCourse) return null;
+            return {
+              ...prevCourse,
+              TAs: [...prevCourse.TAs, selectedTA]
+            };
+          });
+        }
+        setSelectedTA("");
+        setError("TA added successfully!");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Failed to add TA.");
+    }
+  };
+
+  // Filter out students that are already in the course
+  const availableStudents = allStudents.filter(
+    student => !course?.students.includes(student._id)
+  );
+
+  // Filter out students that are already TAs
+  const availableTAs = allStudents.filter(
+    student => !course?.TAs.includes(student._id)
+  );
+
+  // Add the missing handleAddAnswerSheet function
   const handleAddAnswerSheet = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -206,8 +222,8 @@ export default function CourseDetailPage({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            course: courseId,
             student: selectedStudent,
+            course: courseId,
             examType,
             fileUrl,
           }),
@@ -215,14 +231,84 @@ export default function CourseDetailPage({
       );
       if (res.ok) {
         setSelectedStudent("");
-        setExamType("quiz");
         setFileUrl("");
-        setError("Answer sheet uploaded successfully!");
+        setError("Answer sheet added successfully!");
+      } else {
+        setError("Failed to add answer sheet.");
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to upload answer sheet.");
+      setError("Failed to add answer sheet.");
     }
+  };
+
+  // Helper function to get answer sheet for a student
+  const getAnswerSheet = (studentId: string) => {
+    return answerSheets.find(sheet => 
+      sheet.student === studentId || // Handle case where student is just an ID
+      (sheet.student && sheet.student._id === studentId) // Handle case where student is an object
+    );
+  };
+
+  // Helper function to handle file download
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setError("Failed to download file");
+    }
+  };
+
+  // Function to handle uploading for a specific student
+  const handleUploadClick = (student: Student) => {
+    setSelectedStudentForUpload(student);
+    setSelectedStudent(student._id);
+    setShowUploadForm(true);
+  };
+
+  // Function to filter students based on filters
+  const getFilteredStudents = () => {
+    return courseStudents.filter(student => {
+      // Filter by name
+      if (nameFilter && !student.name.toLowerCase().includes(nameFilter.toLowerCase())) {
+        return false;
+      }
+      
+      // Filter by email
+      if (emailFilter && !student.email.toLowerCase().includes(emailFilter.toLowerCase())) {
+        return false;
+      }
+      
+      // Get the answer sheet for this student
+      const answerSheet = getAnswerSheet(student._id);
+      
+      // Filter by uploaded status
+      if (uploadedFilter === "uploaded" && !answerSheet) {
+        return false;
+      }
+      if (uploadedFilter === "not-uploaded" && answerSheet) {
+        return false;
+      }
+      
+      // Filter by exam type - only apply if an exam type is selected and not "all"
+      if (examTypeFilter !== "all") {
+        // If no answer sheet or answer sheet doesn't match the selected exam type, filter out
+        if (!answerSheet || answerSheet.examType !== examTypeFilter) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
   };
 
   if (loading) {
@@ -274,8 +360,8 @@ export default function CourseDetailPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {course.TAs && course.TAs.length > 0 ? (
-                    course.TAs.map((ta) => (
+                  {courseTAs.length > 0 ? (
+                    courseTAs.map((ta) => (
                       <TableRow key={ta._id}>
                         <TableCell>{ta.name}</TableCell>
                         <TableCell>{ta.email}</TableCell>
@@ -299,7 +385,7 @@ export default function CourseDetailPage({
                       <SelectValue placeholder="Select a TA" />
                     </SelectTrigger>
                     <SelectContent>
-                      {allTAs.map((ta) => (
+                      {availableTAs.map((ta) => (
                         <SelectItem key={ta._id} value={ta._id}>
                           {ta.name} ({ta.email})
                         </SelectItem>
@@ -324,8 +410,8 @@ export default function CourseDetailPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {course.students && course.students.length > 0 ? (
-                    course.students.map((student) => (
+                  {courseStudents.length > 0 ? (
+                    courseStudents.map((student) => (
                       <TableRow key={student._id}>
                         <TableCell>{student.name}</TableCell>
                         <TableCell>{student.email}</TableCell>
@@ -349,7 +435,7 @@ export default function CourseDetailPage({
                       <SelectValue placeholder="Select a student" />
                     </SelectTrigger>
                     <SelectContent>
-                      {allStudents.map((student) => (
+                      {availableStudents.map((student) => (
                         <SelectItem key={student._id} value={student._id}>
                           {student.name} ({student.email})
                         </SelectItem>
@@ -366,55 +452,179 @@ export default function CourseDetailPage({
         <TabsContent value="AnswerSheets">
           <Card>
             <CardContent className="pt-6">
-              <form onSubmit={handleAddAnswerSheet} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Student</Label>
-                  <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a student" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allStudents.map((student) => (
-                        <SelectItem key={student._id} value={student._id}>
-                          {student.name} ({student.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                  <Label htmlFor="nameFilter" className="mb-2 block">Name</Label>
+                  <Input
+                    id="nameFilter"
+                    placeholder="Filter by name"
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                  />
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Exam Type</Label>
-                  <Select value={examType} onValueChange={setExamType}>
+                <div>
+                  <Label htmlFor="emailFilter" className="mb-2 block">Email</Label>
+                  <Input
+                    id="emailFilter"
+                    placeholder="Filter by email"
+                    value={emailFilter}
+                    onChange={(e) => setEmailFilter(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="examTypeFilter" className="mb-2 block">Exam Type</Label>
+                  <Select value={examTypeFilter} onValueChange={setExamTypeFilter}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="All exam types" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="all">All exam types</SelectItem>
                       <SelectItem value="quiz">Quiz</SelectItem>
                       <SelectItem value="midsem">Midsem</SelectItem>
                       <SelectItem value="compre">Compre</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>File URL</Label>
-                  <Input
-                    type="url"
-                    value={fileUrl}
-                    onChange={(e) => setFileUrl(e.target.value)}
-                    placeholder="Enter file URL"
-                    required
-                  />
+                <div>
+                  <Label htmlFor="uploadedFilter" className="mb-2 block">Upload Status</Label>
+                  <Select value={uploadedFilter} onValueChange={setUploadedFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All students" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All students</SelectItem>
+                      <SelectItem value="uploaded">Uploaded</SelectItem>
+                      <SelectItem value="not-uploaded">Not uploaded</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+              </div>
 
-                <Button
-                  type="submit"
-                  disabled={!selectedStudent || !fileUrl}
-                >
-                  Upload Answer Sheet
-                </Button>
-              </form>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Answer Sheet</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {getFilteredStudents().length > 0 ? (
+                    getFilteredStudents().map((student) => {
+                      const answerSheet = getAnswerSheet(student._id);
+                      return (
+                        <TableRow key={student._id}>
+                          <TableCell>{student.name}</TableCell>
+                          <TableCell>{student.email}</TableCell>
+                          <TableCell>
+                            {answerSheet ? (
+                              <span className="text-green-600">
+                                {answerSheet.examType.charAt(0).toUpperCase() + answerSheet.examType.slice(1)}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">Not uploaded</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {answerSheet ? (
+                              <div className="flex space-x-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => window.open(answerSheet.fileUrl, '_blank')}
+                                >
+                                  View
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleDownload(
+                                    answerSheet.fileUrl, 
+                                    `${student.name}_${answerSheet.examType}.pdf`
+                                  )}
+                                >
+                                  Download
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleUploadClick(student)}
+                              >
+                                Upload
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center">
+                        No students match the current filters
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+
+              {/* Upload Dialog */}
+              {showUploadForm && selectedStudentForUpload && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                    <h3 className="text-lg font-medium mb-4">
+                      Upload Answer Sheet for {selectedStudentForUpload.name}
+                    </h3>
+                    <form onSubmit={handleAddAnswerSheet} className="space-y-4">
+                      <input type="hidden" name="studentId" value={selectedStudentForUpload._id} />
+                      
+                      <div className="space-y-2">
+                        <Label>Exam Type</Label>
+                        <Select value={examType} onValueChange={setExamType}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="quiz">Quiz</SelectItem>
+                            <SelectItem value="midsem">Midsem</SelectItem>
+                            <SelectItem value="compre">Compre</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>File URL</Label>
+                        <Input
+                          type="url"
+                          value={fileUrl}
+                          onChange={(e) => setFileUrl(e.target.value)}
+                          placeholder="Enter file URL"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-2 mt-6">
+                        <Button 
+                          type="button" 
+                          variant="outline"
+                          onClick={() => {
+                            setShowUploadForm(false);
+                            setSelectedStudentForUpload(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button type="submit">
+                          Upload
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

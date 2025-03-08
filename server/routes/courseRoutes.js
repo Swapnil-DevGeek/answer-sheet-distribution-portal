@@ -6,7 +6,7 @@ const authorizeRoles = require('../middleware/roleMiddleware');
 const { createCourse,getCourseById,getCourses,deleteCourse,updateCourse } = require('../controllers/courseController');
 
 router.use(authMiddleware);
-router.use(authorizeRoles('super_admin','professor','ta','student'));
+// router.use(authorizeRoles('super_admin','professor','ta','student'));
 
 // POST /api/courses – Create a new course
 router.post('/', createCourse);
