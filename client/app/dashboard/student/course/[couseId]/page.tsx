@@ -7,7 +7,14 @@ type AnswerSheet = {
   fileUrl: string;
 };
 
-export default function StudentCourseDetailPage({ params }: { params: { courseId: string } }) {
+type PageProps = {
+  params: {
+    courseId: string;
+  };
+  searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+export default function StudentCourseDetailPage({ params }: PageProps) {
   const courseId = params.courseId;
   const [answerSheet, setAnswerSheet] = useState<AnswerSheet | null>(null);
   const [loading, setLoading] = useState(true);
