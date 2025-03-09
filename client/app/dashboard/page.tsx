@@ -1,3 +1,4 @@
+// app/dashboard/page.jsx
 "use client";
 import ProfessorDashboard from "@/components/DashboardComponents/ProfessorDashboard";
 import StudentDashboard from "@/components/DashboardComponents/StudentDashboard";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { UserCircle, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation"; 
+import { toast } from "sonner";
 
 type User = {
   id: string;
@@ -28,14 +30,38 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchUser = async ()=> {
+    // IMPORTANT: Check for token in URL (from Google OAuth redirect)
+    const queryParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = queryParams.get('token');
+    
+    if (tokenFromUrl) {
+      console.log("Token found in URL after Google OAuth redirect");
+      localStorage.setItem('token', tokenFromUrl);
+      
+      // Clean the URL without causing a navigation
+      window.history.replaceState({}, document.title, '/dashboard');
+      toast.success("Successfully authenticated with Google!");
+    }
+
+    const fetchUser = async () => {
+      // Get token AFTER checking URL to make sure we have the latest
       const token = localStorage.getItem('token');
+      
+      console.log("Token available:", token ? "Yes" : "No");
+      
+      if (!token) {
+        console.log("No token found, redirecting to login page");
+        router.push('/');
+        return;
+      }
+
       try {
         setLoading(true);
         const headers = new Headers();
         headers.set('Authorization', `Bearer ${token}`);
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/me`,{
+        console.log("Fetching user data...");
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/me`, {
           method: "GET",
           headers,
         });
@@ -43,19 +69,23 @@ export default function DashboardPage() {
         if (!response.ok) {
           throw new Error("Failed to fetch user data.");
         }
+        
         const data = await response.json();
-        console.log(data);
+        console.log("User data fetched successfully:", data);
         setUser(data);
 
       } catch (error) {
-        console.error(error);
-      }
-      finally{
+        console.error("Error fetching user data:", error);
+        localStorage.removeItem('token');
+        toast.error("Failed to load user profile. Please log in again.");
+        router.push('/');
+      } finally {
         setLoading(false);
       }
-    }
+    };
+    
     fetchUser();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return <div className="p-6">Loading...</div>;
