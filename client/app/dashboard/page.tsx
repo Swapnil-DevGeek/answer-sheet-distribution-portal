@@ -1,4 +1,3 @@
-// app/dashboard/page.jsx
 "use client";
 import ProfessorDashboard from "@/components/DashboardComponents/ProfessorDashboard";
 import StudentDashboard from "@/components/DashboardComponents/StudentDashboard";

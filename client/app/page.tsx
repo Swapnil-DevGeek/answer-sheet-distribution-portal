@@ -1,6 +1,5 @@
-// app/page.jsx (Login page)
 "use client";
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
@@ -10,16 +9,21 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Separator } from "@/components/ui/separator"; 
+import { Separator } from "@/components/ui/separator";
 
-export default function LoginPage() {
+interface LoginResponse {
+  token: string;
+  message?: string;
+}
+
+export default function LoginPage(): JSX.Element {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
@@ -30,9 +34,9 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
+      const data: LoginResponse = await res.json();
 
-      if (res.ok) {
+      if (res.ok && data.token) {
         toast.success("Logged in successfully!");
         localStorage.setItem("token", data.token);
         router.push("/dashboard");
@@ -40,17 +44,21 @@ export default function LoginPage() {
         setError(data.message || "Invalid credentials");
       }
     } catch (err) {
-      toast.error("Login failed. Please try again.");
-      setError("Login failed. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : "Login failed. Please try again.";
+      toast.error(errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Redirect to Google OAuth route
-    console.log("Redirecting to Google login...");
-    window.location.href = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/google`;
+  const handleGoogleLogin = (): void => {
+    const googleAuthUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!googleAuthUrl) {
+      toast.error("Authentication configuration error");
+      return;
+    }
+    window.location.href = `${googleAuthUrl}/api/auth/google`;
   };
 
   return (

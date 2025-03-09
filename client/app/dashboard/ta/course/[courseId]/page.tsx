@@ -123,6 +123,7 @@ export default function TACourseDetailPage({
         const allStudents = await studentsRes.json();
         
         // Filter students that are in the course
+        //@ts-ignore
         const courseStudents = allStudents.filter(student => 
           courseData.students.includes(student._id)
         );

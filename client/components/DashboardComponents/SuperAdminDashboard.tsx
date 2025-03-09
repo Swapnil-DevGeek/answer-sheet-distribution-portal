@@ -80,7 +80,7 @@ const SuperAdminDashboard = () => {
   const [roleFilter, setRoleFilter] = useState("all");
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const token = localStorage.getItem("token");
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
   useEffect(() => {
     const fetchData = async () => {
@@ -132,7 +132,7 @@ const SuperAdminDashboard = () => {
       console.log("Fetched Courses:", data);
 
       const coursesWithProfessors = data.map((course: Course) => {
-        const professorDetails = currentProfessors.find(p => p._id === course.professor.toString());
+        const professorDetails = currentProfessors.find(p => p._id === course.professor?._id);
         return {
           ...course,
           professor: professorDetails || null,

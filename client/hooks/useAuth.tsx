@@ -1,19 +1,36 @@
 'use client';
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
-const AuthContext = createContext();
+interface User {
+  email: string;
+  [key: string]: any; // For other possible user properties in the JWT
+}
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => void;
+  logout: () => void;
+}
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
       try {
-        const decodedToken = JSON.parse(atob(token.split('.')[1]));
+        const decodedToken = JSON.parse(atob(token.split('.')[1])) as User;
         setUser(decodedToken);
       } catch (error) {
         console.error('Error decoding token:', error);
@@ -30,7 +47,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', tokenFromUrl);
       
       try {
-        const decodedToken = JSON.parse(atob(tokenFromUrl.split('.')[1]));
+        const decodedToken = JSON.parse(atob(tokenFromUrl.split('.')[1])) as User;
         setUser(decodedToken);
         
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -40,7 +57,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/login`, {
         method: 'POST',
@@ -55,7 +72,7 @@ export const AuthProvider = ({ children }) => {
       }
       
       localStorage.setItem('token', data.token);
-      const decodedToken = JSON.parse(atob(data.token.split('.')[1]));
+      const decodedToken = JSON.parse(atob(data.token.split('.')[1])) as User;
       setUser(decodedToken);
       console.log('User logged in:', decodedToken.email);
       router.push('/dashboard');
@@ -66,12 +83,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const loginWithGoogle = () => {
+  const loginWithGoogle = (): void => {
     console.log('Redirecting to Google auth...');
     window.location.href = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/google`;
   };
 
-  const logout = () => {
+  const logout = (): void => {
     localStorage.removeItem('token');
     setUser(null);
     router.push('/login');
@@ -85,4 +102,10 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
