@@ -26,7 +26,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Download, Eye } from "lucide-react";
+import { 
+  Loader2, 
+  Download, 
+  Eye, 
+  Upload, 
+  Filter, 
+  ChevronLeft, 
+  ChevronRight 
+} from "lucide-react";
 
 type Student = {
   _id: string;
@@ -44,6 +52,7 @@ type AnswerSheet = {
   examType: string;
   fileUrl: string;
   student: Student;
+  createdAt: string;
 };
 
 export default function TACourseDetailPage({
@@ -62,6 +71,27 @@ export default function TACourseDetailPage({
   const [examType, setExamType] = useState("quiz");
   const [uploading, setUploading] = useState(false);
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  
+  // Bulk upload state
+  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+  const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
+  const [bulkUploadExamType, setBulkUploadExamType] = useState("quiz");
+  const [bulkUploadLoading, setBulkUploadLoading] = useState(false);
+  const [bulkUploadResult, setBulkUploadResult] = useState<{
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
+  
+  // Filters
+  const [nameFilter, setNameFilter] = useState("");
+  const [emailFilter, setEmailFilter] = useState("");
+  const [examTypeFilter, setExamTypeFilter] = useState("all");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [studentsPerPage, setStudentsPerPage] = useState(10);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -136,7 +166,6 @@ export default function TACourseDetailPage({
 
     if (!response.ok) throw new Error("File upload failed");
     const data = await response.json();
-    console.log(data.secure_url);
     return data.secure_url;
   };
 
@@ -187,8 +216,64 @@ export default function TACourseDetailPage({
     }
   };
 
-  const getAnswerSheet = (studentId: string) => {
-    return answerSheets.find((sheet) => sheet.student._id === studentId);
+  const handleBulkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setBulkUploadFile(e.target.files[0]);
+    }
+  };
+
+  const handleBulkUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkUploadFile) return;
+
+    try {
+      setBulkUploadLoading(true);
+      setBulkUploadResult(null);
+
+      const formData = new FormData();
+      formData.append("file", bulkUploadFile);
+      formData.append("courseId", courseId);
+      formData.append("examType", bulkUploadExamType);
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/answersheets/bulk-upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || "Bulk upload failed");
+      }
+
+      setBulkUploadResult({
+        success: result.success || 0,
+        failed: result.failed || 0,
+        errors: result.errors || [],
+      });
+
+      if (result.success > 0) {
+        // Refresh answer sheets list
+        const sheetsRes = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/answersheets/course/${courseId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const updatedSheets = await sheetsRes.json();
+        setAnswerSheets(updatedSheets);
+        
+        toast.success(`Successfully uploaded ${result.success} answer sheets`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bulk upload failed");
+    } finally {
+      setBulkUploadLoading(false);
+    }
   };
 
   const handleDownload = async (url: string, filename: string) => {
@@ -201,48 +286,160 @@ export default function TACourseDetailPage({
       link.download = filename;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
+      link.remove();
+    } catch (err) {
       toast.error("Failed to download file");
     }
   };
 
+  const getAnswerSheet = (studentId: string) => {
+    return answerSheets.find(
+      (sheet) => sheet.student._id === studentId && 
+      (examTypeFilter === "all" || sheet.examType === examTypeFilter)
+    );
+  };
+
+  const getSelectedStudent = () => {
+    if (!selectedStudentId || !course) return null;
+    return course.students.find((s) => s._id === selectedStudentId);
+  };
+
+  const selectedStudent = getSelectedStudent();
+
+  // Get unique exam types for filter dropdown
+  const uniqueExamTypes = ["all", ...new Set(answerSheets.map(sheet => sheet.examType))];
+
+  // Filter students based on search criteria
+  const filteredStudents = course?.students.filter(student => {
+    const nameMatch = student.name.toLowerCase().includes(nameFilter.toLowerCase());
+    const emailMatch = student.email.toLowerCase().includes(emailFilter.toLowerCase());
+    
+    // For exam type filter, we need to check if the student has an answer sheet of that type
+    const examTypeMatch = examTypeFilter === "all" || 
+      answerSheets.some(sheet => 
+        sheet.student._id === student._id && sheet.examType === examTypeFilter
+      );
+    
+    return nameMatch && emailMatch && (examTypeFilter === "all" || examTypeMatch);
+  }) || [];
+
+  // Pagination logic
+  const indexOfLastStudent = currentPage * studentsPerPage;
+  const indexOfFirstStudent = indexOfLastStudent - studentsPerPage;
+  const currentStudents = filteredStudents.slice(indexOfFirstStudent, indexOfLastStudent);
+  const totalPages = Math.ceil(filteredStudents.length / studentsPerPage);
+
+  // Change page
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+  const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [nameFilter, emailFilter, examTypeFilter]);
+
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading course details...
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  if (!course) return <div className="p-6">Course not found</div>;
-
-  const selectedStudent = course.students.find(
-    (s) => s._id === selectedStudentId
-  );
+  if (!course) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-4">Course not found</h1>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">{course.title}</h1>
-        <p className="text-muted-foreground">{course.code}</p>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">{course.title}</h1>
+          <p className="text-gray-500">{course.code}</p>
+        </div>
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline"
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filters
+          </Button>
+          <Button 
+            onClick={() => setIsBulkUploadModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            Bulk Upload
+          </Button>
+        </div>
       </div>
 
-      <div className="rounded-md border">
+      {/* Filters Panel */}
+      {isFilterOpen && (
+        <div className="bg-gray-50 p-4 rounded-md mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label htmlFor="name-filter">Filter by Name</Label>
+            <Input
+              id="name-filter"
+              placeholder="Search by name..."
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="email-filter">Filter by Email</Label>
+            <Input
+              id="email-filter"
+              placeholder="Search by email..."
+              value={emailFilter}
+              onChange={(e) => setEmailFilter(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="exam-type-filter">Filter by Exam Type</Label>
+            <Select
+              value={examTypeFilter}
+              onValueChange={setExamTypeFilter}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select exam type" />
+              </SelectTrigger>
+              <SelectContent>
+                {uniqueExamTypes.map(type => (
+                  <SelectItem key={type} value={type}>
+                    {type === "all" ? "All Types" : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Student Name</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Answer Sheet</TableHead>
+              <TableHead>Exam Type</TableHead>
+              <TableHead>Upload Date</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {course.students.length > 0 ? (
-              course.students.map((student) => {
+            {currentStudents.length > 0 ? (
+              currentStudents.map((student) => {
                 const answerSheet = getAnswerSheet(student._id);
                 return (
                   <TableRow key={student._id}>
@@ -275,6 +472,20 @@ export default function TACourseDetailPage({
                         <span className="text-muted-foreground">Not uploaded</span>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {answerSheet ? (
+                        <span className="capitalize">{answerSheet.examType}</span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {answerSheet ? (
+                        <span>{new Date(answerSheet.createdAt).toLocaleDateString()}</span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       {!answerSheet && (
                         <Button
@@ -293,8 +504,10 @@ export default function TACourseDetailPage({
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  No students enrolled
+                <TableCell colSpan={6} className="h-24 text-center">
+                  {course.students.length === 0 
+                    ? "No students enrolled" 
+                    : "No students match the current filters"}
                 </TableCell>
               </TableRow>
             )}
@@ -302,6 +515,84 @@ export default function TACourseDetailPage({
         </Table>
       </div>
 
+      {/* Pagination Controls */}
+      {filteredStudents.length > 0 && (
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-gray-500">
+            Showing {indexOfFirstStudent + 1} to {Math.min(indexOfLastStudent, filteredStudents.length)} of {filteredStudents.length} students
+          </div>
+          <div className="flex items-center space-x-2">
+            <Select
+              value={studentsPerPage.toString()}
+              onValueChange={(value) => {
+                setStudentsPerPage(Number(value));
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[100px]">
+                <SelectValue placeholder="Per page" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5 per page</SelectItem>
+                <SelectItem value="10">10 per page</SelectItem>
+                <SelectItem value="25">25 per page</SelectItem>
+                <SelectItem value="50">50 per page</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <div className="flex items-center space-x-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={prevPage} 
+                disabled={currentPage === 1}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              {/* Page number buttons */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Show pages around current page
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => paginate(pageNum)}
+                    className="h-8 w-8 p-0"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={nextPage} 
+                disabled={currentPage === totalPages}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Individual Upload Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -333,8 +624,9 @@ export default function TACourseDetailPage({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="quiz">Quiz</SelectItem>
-                  <SelectItem value="midsem">Mid-semester</SelectItem>
-                  <SelectItem value="compre">Comprehensive</SelectItem>
+                  <SelectItem value="midterm">Midterm</SelectItem>
+                  <SelectItem value="final">Final</SelectItem>
+                  <SelectItem value="assignment">Assignment</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -352,6 +644,90 @@ export default function TACourseDetailPage({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Upload Modal */}
+      {isBulkUploadModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">
+              Bulk Upload Answer Sheets
+            </h3>
+            <form onSubmit={handleBulkUpload} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bulk-exam-type">Exam Type</Label>
+                <Select 
+                  value={bulkUploadExamType} 
+                  onValueChange={setBulkUploadExamType}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select exam type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quiz">Quiz</SelectItem>
+                    <SelectItem value="midterm">Midterm</SelectItem>
+                    <SelectItem value="final">Final</SelectItem>
+                    <SelectItem value="assignment">Assignment</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="bulk-file-upload">Upload ZIP file</Label>
+                <Input
+                  id="bulk-file-upload"
+                  type="file"
+                  accept=".zip,application/zip,application/x-zip-compressed"
+                  onChange={handleBulkFileChange}
+                  required
+                />
+                <p className="text-sm text-gray-500">
+                  ZIP file should contain PDF files named as student-email.pdf (e.g., john@example.com.pdf)
+                </p>
+              </div>
+              
+              {bulkUploadResult && (
+                <div className="p-3 bg-gray-50 rounded-md">
+                  <p className="font-medium">Upload Results:</p>
+                  <p className="text-green-600">Successfully uploaded: {bulkUploadResult.success}</p>
+                  <p className="text-red-600">Failed to upload: {bulkUploadResult.failed}</p>
+                  
+                  {bulkUploadResult.errors.length > 0 && (
+                    <div className="mt-2">
+                      <p className="font-medium text-red-600">Errors:</p>
+                      <ul className="text-sm text-red-600 list-disc pl-5 max-h-32 overflow-y-auto">
+                        {bulkUploadResult.errors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsBulkUploadModalOpen(false)}
+                  type="button"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={bulkUploadLoading || !bulkUploadFile}
+                >
+                  {bulkUploadLoading ? (
+                    <span className="flex items-center">
+                      <span className="animate-spin mr-2 h-4 w-4 border-2 border-b-transparent border-white rounded-full"></span>
+                      Uploading...
+                    </span>
+                  ) : "Upload"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

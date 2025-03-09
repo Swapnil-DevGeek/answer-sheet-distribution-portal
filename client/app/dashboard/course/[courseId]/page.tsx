@@ -65,6 +65,24 @@ export default function CourseDetailPage({
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [selectedStudentForUpload, setSelectedStudentForUpload] = useState<Student | null>(null);
   const token = localStorage.getItem("token");
+  const [bulkUploadType, setBulkUploadType] = useState<"students" | "TAs">("students");
+  const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
+  const [bulkUploadLoading, setBulkUploadLoading] = useState(false);
+  const [bulkUploadResult, setBulkUploadResult] = useState<{
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
+  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+  const [bulkAnswerSheetType, setBulkAnswerSheetType] = useState("quiz");
+  const [bulkAnswerSheetFile, setBulkAnswerSheetFile] = useState<File | null>(null);
+  const [bulkAnswerSheetLoading, setBulkAnswerSheetLoading] = useState(false);
+  const [bulkAnswerSheetResult, setBulkAnswerSheetResult] = useState<{
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
+  const [isBulkAnswerSheetModalOpen, setIsBulkAnswerSheetModalOpen] = useState(false);
 
   const fetchCourse = async () => {
     try {
@@ -311,6 +329,145 @@ export default function CourseDetailPage({
     });
   };
 
+  const handleBulkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setBulkUploadFile(e.target.files[0]);
+      setBulkUploadResult(null); // Reset results when new file is selected
+    }
+  };
+
+  const handleBulkUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkUploadFile) {
+      setError("Please select a file to upload");
+      return;
+    }
+
+    const allowedTypes = [
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+    ];
+    
+    if (!allowedTypes.includes(bulkUploadFile.type)) {
+      setError("Please upload a CSV or Excel file");
+      return;
+    }
+
+    setBulkUploadLoading(true);
+    const formData = new FormData();
+    formData.append("file", bulkUploadFile);
+    formData.append("courseId", courseId);
+
+    try {
+      const endpoint = bulkUploadType === "TAs" 
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}/bulk-tas` 
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/courses/${courseId}/bulk-students`;
+      
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || `Failed to add ${bulkUploadType}`);
+      }
+
+      setBulkUploadResult({
+        success: data.success || 0,
+        failed: data.failed || 0,
+        errors: data.errors || [],
+      });
+      
+      if (data.success > 0) {
+        setError(`Successfully added ${data.success} ${bulkUploadType}`);
+        // Refresh the course data to show the newly added users
+        fetchCourse();
+      }
+      
+      if (data.failed > 0) {
+        setError(`Failed to add ${data.failed} ${bulkUploadType}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || `Error adding ${bulkUploadType}`);
+    } finally {
+      setBulkUploadLoading(false);
+    }
+  };
+
+  const handleBulkAnswerSheetFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setBulkAnswerSheetFile(e.target.files[0]);
+      setBulkAnswerSheetResult(null); // Reset results when new file is selected
+    }
+  };
+
+  const handleBulkAnswerSheetUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkAnswerSheetFile) {
+      setError("Please select a zip file to upload");
+      return;
+    }
+
+    if (bulkAnswerSheetFile.type !== "application/zip" && 
+        bulkAnswerSheetFile.type !== "application/x-zip-compressed") {
+      setError("Please upload a ZIP file");
+      return;
+    }
+
+    setBulkAnswerSheetLoading(true);
+    const formData = new FormData();
+    formData.append("file", bulkAnswerSheetFile);
+    formData.append("courseId", courseId);
+    formData.append("examType", bulkAnswerSheetType);
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/answersheets/bulk-upload`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to upload answer sheets");
+      }
+
+      setBulkAnswerSheetResult({
+        success: data.success || 0,
+        failed: data.failed || 0,
+        errors: data.errors || [],
+      });
+      
+      if (data.success > 0) {
+        setError(`Successfully uploaded ${data.success} answer sheets`);
+        // Refresh the answer sheets data
+        fetchCourse();
+      }
+      
+      if (data.failed > 0) {
+        setError(`Failed to upload ${data.failed} answer sheets`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Error uploading answer sheets");
+    } finally {
+      setBulkAnswerSheetLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -352,6 +509,19 @@ export default function CourseDetailPage({
         <TabsContent value="TAs">
           <Card>
             <CardContent className="pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Teaching Assistants</h3>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setBulkUploadType("TAs");
+                    setIsBulkUploadModalOpen(true);
+                  }}
+                >
+                  Bulk Add TAs
+                </Button>
+              </div>
+              
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -402,6 +572,19 @@ export default function CourseDetailPage({
         <TabsContent value="Students">
           <Card>
             <CardContent className="pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Students</h3>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setBulkUploadType("students");
+                    setIsBulkUploadModalOpen(true);
+                  }}
+                >
+                  Bulk Add Students
+                </Button>
+              </div>
+              
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -452,6 +635,16 @@ export default function CourseDetailPage({
         <TabsContent value="AnswerSheets">
           <Card>
             <CardContent className="pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Answer Sheets</h3>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsBulkAnswerSheetModalOpen(true)}
+                >
+                  Bulk Upload Answer Sheets
+                </Button>
+              </div>
+              
               {/* Filters */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div>
@@ -629,6 +822,156 @@ export default function CourseDetailPage({
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Bulk Upload Modal */}
+      {isBulkUploadModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">
+              Bulk Add {bulkUploadType === "TAs" ? "Teaching Assistants" : "Students"}
+            </h3>
+            <form onSubmit={handleBulkUpload} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bulk-file-upload">Upload CSV or Excel file</Label>
+                <Input
+                  id="bulk-file-upload"
+                  type="file"
+                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                  onChange={handleBulkFileChange}
+                  required
+                />
+                <p className="text-sm text-gray-500">
+                  File should contain a column for Email of existing users
+                </p>
+              </div>
+              
+              {bulkUploadResult && (
+                <div className="p-3 bg-gray-50 rounded-md">
+                  <p className="font-medium">Upload Results:</p>
+                  <p className="text-green-600">Successfully added: {bulkUploadResult.success}</p>
+                  <p className="text-red-600">Failed to add: {bulkUploadResult.failed}</p>
+                  
+                  {bulkUploadResult.errors.length > 0 && (
+                    <div className="mt-2">
+                      <p className="font-medium text-red-600">Errors:</p>
+                      <ul className="text-sm text-red-600 list-disc pl-5 max-h-32 overflow-y-auto">
+                        {bulkUploadResult.errors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsBulkUploadModalOpen(false)}
+                  type="button"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={bulkUploadLoading || !bulkUploadFile}
+                >
+                  {bulkUploadLoading ? (
+                    <span className="flex items-center">
+                      <span className="animate-spin mr-2 h-4 w-4 border-2 border-b-transparent border-white rounded-full"></span>
+                      Uploading...
+                    </span>
+                  ) : "Upload"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Answer Sheet Upload Modal */}
+      {isBulkAnswerSheetModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">
+              Bulk Upload Answer Sheets
+            </h3>
+            <form onSubmit={handleBulkAnswerSheetUpload} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="exam-type">Exam Type</Label>
+                <Select 
+                  value={bulkAnswerSheetType} 
+                  onValueChange={setBulkAnswerSheetType}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select exam type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quiz">Quiz</SelectItem>
+                    <SelectItem value="midterm">Midterm</SelectItem>
+                    <SelectItem value="final">Final</SelectItem>
+                    <SelectItem value="assignment">Assignment</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="bulk-answersheet-upload">Upload ZIP file</Label>
+                <Input
+                  id="bulk-answersheet-upload"
+                  type="file"
+                  accept=".zip,application/zip,application/x-zip-compressed"
+                  onChange={handleBulkAnswerSheetFileChange}
+                  required
+                />
+                <p className="text-sm text-gray-500">
+                  ZIP file should contain PDF files named as student-email.pdf (e.g., john@example.com.pdf)
+                </p>
+              </div>
+              
+              {bulkAnswerSheetResult && (
+                <div className="p-3 bg-gray-50 rounded-md">
+                  <p className="font-medium">Upload Results:</p>
+                  <p className="text-green-600">Successfully uploaded: {bulkAnswerSheetResult.success}</p>
+                  <p className="text-red-600">Failed to upload: {bulkAnswerSheetResult.failed}</p>
+                  
+                  {bulkAnswerSheetResult.errors.length > 0 && (
+                    <div className="mt-2">
+                      <p className="font-medium text-red-600">Errors:</p>
+                      <ul className="text-sm text-red-600 list-disc pl-5 max-h-32 overflow-y-auto">
+                        {bulkAnswerSheetResult.errors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsBulkAnswerSheetModalOpen(false)}
+                  type="button"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={bulkAnswerSheetLoading || !bulkAnswerSheetFile}
+                >
+                  {bulkAnswerSheetLoading ? (
+                    <span className="flex items-center">
+                      <span className="animate-spin mr-2 h-4 w-4 border-2 border-b-transparent border-white rounded-full"></span>
+                      Uploading...
+                    </span>
+                  ) : "Upload"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

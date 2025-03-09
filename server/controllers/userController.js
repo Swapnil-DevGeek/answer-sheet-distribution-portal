@@ -55,21 +55,91 @@ const getStudents = async (req,res)=> {
     }
 }
 
-// GET /api/users/tas
-    const getTAs = async (req,res)=> {
-        try{
-            const TAs = await User.find({ isTa : true }).select('-password');
-            res.json(TAs);
-        }catch(error) {
-            console.error(error);
-            res.status(500).json({ message: 'Server error' });
-        }
+// Get teaching assistants
+const getTAs = async (req, res) => {
+  try {
+    const tas = await User.find({ isTa: true })
+      .select('name email')
+      .sort({ name: 1 });
+    
+    return res.status(200).json(tas);
+  } catch (error) {
+    console.error('Error fetching TAs:', error);
+    return res.status(500).json({ message: 'Error fetching teaching assistants', error: error.message });
+  }
+};
+
+// Get users with pagination and filtering
+const getUsers = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search || '';
+    const role = req.query.role || '';
+
+    // Build query
+    let query = {};
+    
+    // Add role filter if specified
+    if (role) {
+      if (role === 'ta') {
+        query.isTa = true;
+      } else {
+        query.role = role;
+      }
     }
+    
+    // Add search filter if specified
+    if (search) {
+      query = {
+        ...query,
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      };
+    }
+
+    // Get total count for pagination
+    const total = await User.countDocuments(query);
+    
+    // Get users for current page
+    const users = await User.find(query)
+      .select('name email role isTa')
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Transform the data to include isTa in the role display
+    const transformedUsers = users.map(user => {
+      const userData = user.toObject();
+      // If user is a TA, set role display to 'ta'
+      if (userData.isTa) {
+        userData.displayRole = 'ta';
+      } else {
+        userData.displayRole = userData.role;
+      }
+      return userData;
+    });
+
+    return res.status(200).json({
+      users: transformedUsers,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      totalUsers: total
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return res.status(500).json({ message: 'Error fetching users', error: error.message });
+  }
+};
 
 module.exports = {
     getProfile,
     updateProfile,
     getProfessors,
     getStudents,
-    getTAs
+    getTAs,
+    getUsers
 };
