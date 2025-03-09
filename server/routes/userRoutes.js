@@ -195,8 +195,7 @@ router.post('/bulk-upload', authMiddleware, upload.single('file'), async (req, r
       try {
         // Log the user object to see what we're working with
         console.log('Processing user:', user);
-        
-        // Check if user object has required fields
+
         if (!user.name || !user.email) {
           results.errors.push(`Missing required fields for user: ${JSON.stringify(user)}`);
           results.failed++;
@@ -215,8 +214,7 @@ router.post('/bulk-upload', authMiddleware, upload.single('file'), async (req, r
           continue;
         }
         
-        // Generate a random password
-        const password = Math.random().toString(36).slice(-8);
+        const password = "password";
         
         // Hash the password
         const salt = await bcrypt.genSalt(10);
@@ -232,9 +230,7 @@ router.post('/bulk-upload', authMiddleware, upload.single('file'), async (req, r
         
         await newUser.save();
         results.success++;
-        
-        // Send email with credentials (implement this)
-        // sendWelcomeEmail(email, password);
+    
       } catch (err) {
         console.error(`Error processing user:`, err);
         results.errors.push(`Error processing user: ${err.message}`);
@@ -242,7 +238,6 @@ router.post('/bulk-upload', authMiddleware, upload.single('file'), async (req, r
       }
     }
     
-    // Clean up the uploaded file
     try {
       fs.unlinkSync(filePath);
     } catch (err) {
