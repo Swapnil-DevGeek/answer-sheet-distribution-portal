@@ -84,7 +84,7 @@ passport.serializeUser((user, done) => {
       return done(error, null);
     }
   }
-));
+  ));
 
 app.get('/api/auth/google',
   passport.authenticate('google', { scope: ['profile', 'email'] })
@@ -122,6 +122,50 @@ app.get('/api/auth/google/callback',
   }
 );
 
+  app.post('/api/auth/fluttermkc',async (req,res)=>{
+    try {
+      const { email } = await req.body;
+      console.log("email recieved : ",email);
+
+      const user = await User.findOne({email});
+      if(!user){
+        const studentEmailPattern = /^f\d{4}\d{4}@goa\.bits-pilani\.ac\.in$/;
+        const role = studentEmailPattern.test(email) ? 'student' : 'professor';
+
+        user = new User({
+          name: profile.displayName || email.split('@')[0],
+          email: email,
+          googleId: profile.id,
+          role: role, 
+          isTa: false 
+        });
+        
+        await user.save();
+
+      }
+
+      console.log(user);
+
+      const token = jwt.sign(
+        {
+          id: user._id,
+          email: user.email,
+          name: user.name || user.displayName || user.email.split('@')[0],
+          role: user.role,
+          isTa: user.isTa || false
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      return res.status(200).json({token});
+
+    } catch (error) { 
+      return res.status(500).json({
+        message : error
+      })
+    }
+  })
   
   app.use('/api/auth', require("./routes/authRoutes"));
   app.use('/api/users', require('./routes/userRoutes'));
